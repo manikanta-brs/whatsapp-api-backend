@@ -34,6 +34,17 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/admin", adminRoute);
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === "YOUR_VERIFY_TOKEN") {
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403); // Forbidden
+  }
+});
 
 app.listen(3000, () => {
   console.log("Server is running on port 3000");
