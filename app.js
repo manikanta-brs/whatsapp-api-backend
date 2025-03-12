@@ -15,6 +15,7 @@ const allowedOrigins = [
   "http://localhost:4000",
   "http://localhost:5174",
   "http://localhost:5173",
+  "*",
 ];
 
 app.use(
@@ -44,61 +45,35 @@ app.get("/", (req, res) => {
 app.use("/api/admin", adminRoute);
 
 // 🔹 Webhook Verification (WhatsApp API)
+// app.get("/webhook", (req, res) => {
+//   const mode = req.query["hub.mode"];
+//   const token = req.query["hub.verify_token"];
+//   const challenge = req.query["hub.challenge"];
+//   console.log(mode, token, challenge);
+
+//   if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+//     res.status(200).send(challenge);
+//   } else {
+//     res.sendStatus(403); // Forbidden
+//   }
+// });
 app.get("/webhook", (req, res) => {
+  console.log("Verification Request:", req.query);
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
-  console.log(mode, token, challenge);
 
   if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
     res.status(200).send(challenge);
   } else {
-    res.sendStatus(403); // Forbidden
+    res.sendStatus(403);
   }
 });
 
 // 🔹 Webhook Message Handling (Store in DB)
 app.post("/webhook", async (req, res) => {
-  try {
-    const body = req.body;
-
-    console.log("Webhook payload:", JSON.stringify(body, null, 2));
-
-    if (
-      body.entry &&
-      body.entry[0].changes &&
-      body.entry[0].changes[0].value.messages &&
-      body.entry[0].changes[0].value.messages[0]
-    ) {
-      const from = body.entry[0].changes[0].value.messages[0].from; // User's WhatsApp number
-      const to = process.env.WHATSAPP_BUSINESS_PHONE_NUMBER_ID; // Admin's number
-      const msgBody =
-        body.entry[0].changes[0].value.messages[0].text?.body ||
-        "Media Message";
-      const msgType = body.entry[0].changes[0].value.messages[0].type || "text";
-
-      console.log("From:", from);
-      console.log("To:", to);
-      console.log("Message:", msgBody);
-
-      // Save received message to MongoDB
-      await Message.create({
-        sender: from,
-        receiver: to,
-        body: msgBody,
-        type: msgType,
-        timestamp: new Date(),
-        direction: "received",
-      });
-
-      console.log("✅ Received message saved to DB!");
-    }
-
-    res.status(200).send("EVENT_RECEIVED");
-  } catch (error) {
-    console.error("❌ Error saving received message:", error);
-    res.sendStatus(500);
-  }
+  console.log("Incoming Request:", req.body);
+  res.status(200).send("Message Received");
 });
 
 app.listen(3000, () => {
