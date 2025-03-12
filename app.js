@@ -76,6 +76,44 @@ app.get("/webhook", (req, res) => {
 //   res.status(200).send("Message Received");
 // });
 
+// app.post("/webhook", async (req, res) => {
+//   console.log("Incoming Request:", JSON.stringify(req.body, null, 2));
+
+//   try {
+//     const entry = req.body.entry?.[0]; // Get the first entry
+//     const changes = entry?.changes?.[0]; // Get the first change
+//     const message = changes?.value?.messages?.[0]; // Extract message
+
+//     if (!message) {
+//       return res.status(200).send("No messages found");
+//     }
+
+//     const sender = message.from; // User's WhatsApp number
+//     const receiver = process.env.WA_PHONE_NUMBER; // Your business number
+//     const type = message.type; // Message type (text, image, etc.)
+//     const body = message.text?.body || null; // Extract text message (if available)
+
+//     // Save to MongoDB
+//     const newMessage = new Message({
+//       sender,
+//       receiver,
+//       to: receiver, // For consistency
+//       type,
+//       body,
+//       timestamp: new Date(parseInt(message.timestamp) * 1000), // Convert WhatsApp timestamp
+//       direction: "received",
+//     });
+
+//     await newMessage.save();
+//     console.log("📩 Message Saved to DB:", newMessage);
+
+//     res.status(200).send("Message Saved");
+//   } catch (error) {
+//     console.error("❌ Error Processing Webhook:", error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// });
+
 app.post("/webhook", async (req, res) => {
   console.log("Incoming Request:", JSON.stringify(req.body, null, 2));
 
@@ -89,15 +127,14 @@ app.post("/webhook", async (req, res) => {
     }
 
     const sender = message.from; // User's WhatsApp number
-    const receiver = process.env.WA_PHONE_NUMBER; // Your business number
+    const receiver = message.to || "unknown"; // Extract business number dynamically
     const type = message.type; // Message type (text, image, etc.)
     const body = message.text?.body || null; // Extract text message (if available)
 
     // Save to MongoDB
     const newMessage = new Message({
       sender,
-      receiver,
-      to: receiver, // For consistency
+      receiver, // Now this is dynamic
       type,
       body,
       timestamp: new Date(parseInt(message.timestamp) * 1000), // Convert WhatsApp timestamp
