@@ -1,87 +1,3 @@
-// import express from "express";
-// import dotenv from "dotenv";
-// import cors from "cors";
-// import adminRoute from "./src/routes/adminRoute.js";
-
-// dotenv.config();
-
-// const app = express();
-
-// app.use(express.json());
-
-// // Allow requests from both frontend ports (4000 and 5173)
-// const allowedOrigins = [
-//   "http://localhost:4000",
-//   "http://localhost:5174",
-//   "http://localhost:5173",
-// ];
-
-// app.use(
-//   cors({
-//     origin: function (origin, callback) {
-//       if (!origin || allowedOrigins.includes(origin)) {
-//         callback(null, true);
-//       } else {
-//         callback(new Error("Not allowed by CORS"));
-//       }
-//     },
-//     credentials: true, // Allow cookies if needed
-//   })
-// );
-
-// app.get("/", (req, res) => {
-//   res.json({ message: "Welcome to the API!" });
-// });
-
-// app.use("/api/admin", adminRoute);
-
-// // Webhook Verification
-// app.get("/webhook", (req, res) => {
-//   const mode = req.query["hub.mode"];
-//   const token = req.query["hub.verify_token"];
-//   const challenge = req.query["hub.challenge"];
-
-//   if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
-//     res.status(200).send(challenge);
-//   } else {
-//     res.sendStatus(403); // Forbidden
-//   }
-// });
-
-// // Webhook Message Handling
-// app.post("/webhook", (req, res) => {
-//   const body = req.body;
-
-//   console.log("Webhook payload:", JSON.stringify(body, null, 2));
-
-//   if (body.object) {
-//     if (
-//       body.entry &&
-//       body.entry[0].changes &&
-//       body.entry[0].changes[0].value.messages &&
-//       body.entry[0].changes[0].value.messages[0]
-//     ) {
-//       const phoneNumberId =
-//         body.entry[0].changes[0].value.metadata.phone_number_id;
-//       const from = body.entry[0].changes[0].value.messages[0].from;
-//       const msgBody = body.entry[0].changes[0].value.messages[0].text.body;
-
-//       console.log("Phone Number ID:", phoneNumberId);
-//       console.log("From:", from);
-//       console.log("Message Body:", msgBody);
-
-//       // Process the message (e.g., store it, send a reply)
-//     }
-//     res.status(200).send("EVENT_RECEIVED");
-//   } else {
-//     res.sendStatus(404);
-//   }
-// });
-
-// app.listen(3000, () => {
-//   console.log("Server is running on port 3000");
-// });
-
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -113,8 +29,6 @@ app.use(
     credentials: true,
   })
 );
-
-// 🔹 Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -134,6 +48,7 @@ app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
+  console.log(mode, token, challenge);
 
   if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
     res.status(200).send(challenge);
@@ -144,38 +59,46 @@ app.get("/webhook", (req, res) => {
 
 // 🔹 Webhook Message Handling (Store in DB)
 app.post("/webhook", async (req, res) => {
-  const body = req.body;
+  try {
+    const body = req.body;
 
-  console.log("Webhook payload:", JSON.stringify(body, null, 2));
+    console.log("Webhook payload:", JSON.stringify(body, null, 2));
 
-  if (
-    body.entry &&
-    body.entry[0].changes &&
-    body.entry[0].changes[0].value.messages &&
-    body.entry[0].changes[0].value.messages[0]
-  ) {
-    const phoneNumberId =
-      body.entry[0].changes[0].value.metadata.phone_number_id;
-    const from = body.entry[0].changes[0].value.messages[0].from;
-    const msgBody = body.entry[0].changes[0].value.messages[0].text.body;
+    if (
+      body.entry &&
+      body.entry[0].changes &&
+      body.entry[0].changes[0].value.messages &&
+      body.entry[0].changes[0].value.messages[0]
+    ) {
+      const from = body.entry[0].changes[0].value.messages[0].from; // User's WhatsApp number
+      const to = process.env.WHATSAPP_BUSINESS_PHONE_NUMBER_ID; // Admin's number
+      const msgBody =
+        body.entry[0].changes[0].value.messages[0].text?.body ||
+        "Media Message";
+      const msgType = body.entry[0].changes[0].value.messages[0].type || "text";
 
-    console.log("Phone Number ID:", phoneNumberId);
-    console.log("From:", from);
-    console.log("Message Body:", msgBody);
+      console.log("From:", from);
+      console.log("To:", to);
+      console.log("Message:", msgBody);
 
-    // Save message to MongoDB
-    await Message.create({ phoneNumberId, from, message: msgBody });
+      // Save received message to MongoDB
+      await Message.create({
+        sender: from,
+        receiver: to,
+        body: msgBody,
+        type: msgType,
+        timestamp: new Date(),
+        direction: "received",
+      });
 
-    console.log("Message saved to DB!");
+      console.log("✅ Received message saved to DB!");
+    }
+
+    res.status(200).send("EVENT_RECEIVED");
+  } catch (error) {
+    console.error("❌ Error saving received message:", error);
+    res.sendStatus(500);
   }
-
-  res.status(200).send("EVENT_RECEIVED");
-});
-
-// 🔹 API to Fetch Messages for Frontend
-app.get("/api/messages", async (req, res) => {
-  const messages = await Message.find().sort({ timestamp: -1 });
-  res.json(messages);
 });
 
 app.listen(3000, () => {

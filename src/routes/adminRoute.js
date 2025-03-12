@@ -4,9 +4,11 @@ import {
   getMessageTemplates,
   getPhoneNumbers,
   sendMessage,
-} from "../controllers/messageController.js";
+  getMessages, // Corrected typo here
+} from "../controllers/messageController.js"; // Use messageController
 import createTemplate from "../controllers/templateController.js";
 import getAccountDetails from "../controllers/accountController.js";
+
 const router = Router();
 
 // get user data
@@ -16,5 +18,6 @@ router.post("/templates", createTemplate);
 router.get("/account", getAccountDetails);
 router.get("/phonenumbers", getPhoneNumbers);
 router.post("/sendmessage", sendMessage);
+router.get("/messages", getMessages);
 
 export default router;
