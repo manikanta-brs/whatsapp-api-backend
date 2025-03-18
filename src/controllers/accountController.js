@@ -35,31 +35,34 @@ dotenv.config();
 // };
 const getAccountDetails = async (req, res) => {
   try {
-    const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
+    const baseURL = process.env.BASEURL;
+    const version = process.env.VERSION;
     const accessToken = process.env.ACCESS_TOKEN;
     const accountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 
-    if (!apiURL || !accessToken || !accountId) {
-      console.error("🚨 Missing environment variables:", {
-        apiURL,
-        accessToken,
-        accountId,
-      });
+    // ✅ Debugging Logs
+    console.log("✅ BASEURL:", baseURL || "❌ Missing");
+    console.log("✅ VERSION:", version || "❌ Missing");
+    console.log("✅ ACCESS_TOKEN:", accessToken ? "Exists ✅" : "❌ Missing");
+    console.log("✅ WHATSAPP_BUSINESS_ACCOUNT_ID:", accountId || "❌ Missing");
+
+    // ✅ Check for missing variables before forming the request
+    if (!baseURL || !version || !accessToken || !accountId) {
+      console.error("🚨 Missing environment variables");
       return res
         .status(500)
         .json({ message: "Configuration error: Missing env variables" });
     }
 
-    const requestURL = `${apiURL}${accountId}?fields=name`;
+    const requestURL = `${baseURL}${version}/${accountId}?fields=name`;
 
     console.log("📌 Making request to:", requestURL);
-    console.log("📌 Authorization Header:", `Bearer ${accessToken}`);
 
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = await fetch(requestURL, { headers });
 
     if (!response.ok) {
-      const errorBody = await response.text(); // Get API error details
+      const errorBody = await response.text();
       console.error(
         "🚨 API Error:",
         response.status,
