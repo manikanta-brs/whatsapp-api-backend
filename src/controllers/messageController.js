@@ -55,48 +55,152 @@ const getPhoneNumbers = async (req, res) => {
   }
 };
 
+// const getMessageTemplates = async (req, res) => {
+//   try {
+//     const baseURL = `${process.env.BASEURL}${process.env.VERSION}/`;
+//     const accessToken = process.env.ACCESS_TOKEN;
+//     const whatsappBusinessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+
+//     const headers = {
+//       Authorization: `Bearer ${accessToken}`,
+//       "Content-Type": "application/json",
+//     };
+
+//     let allTemplates = [];
+//     let nextURL = `${baseURL}${whatsappBusinessAccountId}/message_templates`;
+
+//     while (nextURL) {
+//       console.log(`Fetching from: ${nextURL}`);
+
+//       const response = await axios.get(nextURL, { headers });
+
+//       if (response.status !== 200) {
+//         throw new Error(
+//           `HTTP error: ${response.status} ${response.statusText}`
+//         );
+//       }
+
+//       const templates = response.data.data;
+//       allTemplates = allTemplates.concat(templates); // Add current batch to results
+
+//       if (response.data.paging && response.data.paging.next) {
+//         nextURL = response.data.paging.next;
+//       } else {
+//         nextURL = null; // No more pages
+//       }
+//     }
+
+//     console.log("Total Templates:", allTemplates.length);
+//     return res.json(allTemplates);
+//   } catch (error) {
+//     console.error("Error fetching templates:", error); //Better error logging
+//     return res
+//       .status(500)
+//       .json({ message: "Internal server error", error: error.message }); //Include error message in response
+//   }
+// };
 const getMessageTemplates = async (req, res) => {
   try {
-    const baseURL = `${process.env.BASEURL}${process.env.VERSION}/`;
+    console.log("Entering getMessageTemplates route");
+
+    const baseURL = process.env.BASEURL; // Shorten for readability and easier logging
+    const version = process.env.VERSION; // Get version
     const accessToken = process.env.ACCESS_TOKEN;
     const whatsappBusinessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 
+    console.log("baseURL:", baseURL); //Crucial: Verify it's set!
+    console.log("version:", version); // Verify this too
+    console.log(
+      "accessToken (first 5 chars):",
+      accessToken ? accessToken.substring(0, 5) : null
+    ); //Security: Show only a few chars
+    console.log("whatsappBusinessAccountId:", whatsappBusinessAccountId); //Verify this is set
+
+    if (!baseURL || !version || !accessToken || !whatsappBusinessAccountId) {
+      console.error("Missing environment variables!"); // Very Important: Check this first
+      return res.status(500).json({
+        message: "Internal server error",
+        error: "Missing required environment variables",
+      });
+    }
+    const fullBaseURL = `${baseURL}${version}/`;
     const headers = {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     };
 
     let allTemplates = [];
-    let nextURL = `${baseURL}${whatsappBusinessAccountId}/message_templates`;
+    let nextURL = `${fullBaseURL}${whatsappBusinessAccountId}/message_templates`;
 
     while (nextURL) {
       console.log(`Fetching from: ${nextURL}`);
 
-      const response = await axios.get(nextURL, { headers });
+      try {
+        //Wrap axios.get in try/catch
+        const response = await axios.get(nextURL, { headers });
 
-      if (response.status !== 200) {
-        throw new Error(
-          `HTTP error: ${response.status} ${response.statusText}`
-        );
-      }
+        if (response.status !== 200) {
+          console.error(
+            "HTTP error details:",
+            response.status,
+            response.statusText,
+            response.data
+          ); // Log more details
+          throw new Error(
+            `HTTP error: ${response.status} ${response.statusText}`
+          );
+        }
 
-      const templates = response.data.data;
-      allTemplates = allTemplates.concat(templates); // Add current batch to results
+        const templates = response.data.data;
 
-      if (response.data.paging && response.data.paging.next) {
-        nextURL = response.data.paging.next;
-      } else {
-        nextURL = null; // No more pages
+        if (!Array.isArray(templates)) {
+          //Check if templates is an array!
+          console.error(
+            "Templates is not an array. Response data:",
+            response.data
+          );
+          throw new Error("Templates data is not an array");
+        }
+
+        allTemplates = allTemplates.concat(templates); // Add current batch to results
+
+        if (response.data.paging && response.data.paging.next) {
+          nextURL = response.data.paging.next;
+        } else {
+          nextURL = null; // No more pages
+        }
+      } catch (axiosError) {
+        //Handle axios errors specifically
+        console.error("Axios error:", axiosError);
+        if (axiosError.response) {
+          console.error("Axios error response data:", axiosError.response.data);
+          console.error(
+            "Axios error response status:",
+            axiosError.response.status
+          );
+          console.error(
+            "Axios error response headers:",
+            axiosError.response.headers
+          );
+        } else if (axiosError.request) {
+          console.error(
+            "Axios error: No response received",
+            axiosError.request
+          );
+        } else {
+          console.error("Axios error: Request setup error", axiosError.message);
+        }
+        throw axiosError; //Re-throw to be caught in outer catch
       }
     }
 
     console.log("Total Templates:", allTemplates.length);
     return res.json(allTemplates);
   } catch (error) {
-    console.error("Error fetching templates:", error); //Better error logging
+    console.error("Error in getMessageTemplates route:", error);
     return res
       .status(500)
-      .json({ message: "Internal server error", error: error.message }); //Include error message in response
+      .json({ message: "Internal server error", error: error.message });
   }
 };
 
