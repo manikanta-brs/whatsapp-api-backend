@@ -1,83 +1,38 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-// const getAccountDetails = async (req, res) => {
-//   try {
-//     const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
-//     const accessToken = process.env.ACCESS_TOKEN;
-
-//     if (!apiURL || !accessToken || !process.env.WHATSAPP_BUSINESS_ACCOUNT_ID) {
-//       return res.status(500).json({ message: "Missing environment variables" });
-//     }
-
-//     const headers = {
-//       Authorization: `Bearer ${accessToken}`,
-//     };
-
-//     const response = await fetch(
-//       `${apiURL}${process.env.WHATSAPP_BUSINESS_ACCOUNT_ID}?fields=name`,
-//       { headers }
-//     );
-
-//     if (!response.ok) {
-//       console.error("API Error:", response.status, response.statusText);
-//       return res.status(response.status).json({
-//         message: `HTTP error: ${response.status} ${response.statusText}`,
-//       });
-//     }
-
-//     const data = await response.json();
-//     return res.status(200).json(data);
-//   } catch (error) {
-//     console.error("Error fetching account details:", error);
-//     return res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 const getAccountDetails = async (req, res) => {
   try {
-    const baseURL = process.env.BASEURL;
-    const version = process.env.VERSION;
+    const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
     const accessToken = process.env.ACCESS_TOKEN;
-    const accountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 
-    // ✅ Debugging Logs
-    console.log("✅ BASEURL:", baseURL || "❌ Missing");
-    console.log("✅ VERSION:", version || "❌ Missing");
-    console.log("✅ ACCESS_TOKEN:", accessToken ? "Exists ✅" : "❌ Missing");
-    console.log("✅ WHATSAPP_BUSINESS_ACCOUNT_ID:", accountId || "❌ Missing");
-
-    // ✅ Check for missing variables before forming the request
-    if (!baseURL || !version || !accessToken || !accountId) {
-      console.error("🚨 Missing environment variables");
-      return res
-        .status(500)
-        .json({ message: "Configuration error: Missing env variables" });
+    if (!apiURL || !accessToken || !process.env.WHATSAPP_BUSINESS_ACCOUNT_ID) {
+      return res.status(500).json({ message: "Missing environment variables" });
     }
+    // console.log(apiURL);
+    // console.log(accessToken);
+    // console.log(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID);
 
-    const requestURL = `${baseURL}${version}/${accountId}?fields=name`;
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+    };
 
-    console.log("📌 Making request to:", requestURL);
-
-    const headers = { Authorization: `Bearer ${accessToken}` };
-    const response = await fetch(requestURL, { headers });
+    const response = await fetch(
+      `${apiURL}${process.env.WHATSAPP_BUSINESS_ACCOUNT_ID}?fields=name`,
+      { headers }
+    );
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(
-        "🚨 API Error:",
-        response.status,
-        response.statusText,
-        errorBody
-      );
-      return res
-        .status(response.status)
-        .json({ message: `HTTP error: ${response.status}`, error: errorBody });
+      console.error("API Error:", response.status, response.statusText);
+      return res.status(response.status).json({
+        message: `HTTP error: ${response.status} ${response.statusText}`,
+      });
     }
 
     const data = await response.json();
     return res.status(200).json(data);
   } catch (error) {
-    console.error("🚨 Error fetching account details:", error.message);
+    console.error("Error fetching account details:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

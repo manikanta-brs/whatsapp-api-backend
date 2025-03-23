@@ -73,7 +73,7 @@ const uploadFile = async (uploadSessionId, fileBuffer, fileType) => {
 
 async function handleUpload(req, res) {
   const { appId, token } = req.body;
-  console.log(appId, token);
+  console.log({ appId, token });
 
   if (!appId || !token) {
     return res.status(400).json({ error: "App ID and Token are required" });
