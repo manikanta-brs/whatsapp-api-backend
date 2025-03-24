@@ -16,19 +16,31 @@ const allowedOrigins = [
   "http://localhost:5173",
   "*",
 ];
-
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
+    origin: [
+      "http://localhost:4000",
+      "http://localhost:5174",
+      "http://localhost:5173",
+      "https://whatsapp-api-frontend.onrender.com", // Add frontend domain
+    ],
+    methods: "GET,POST,PUT,DELETE",
+    credentials: true, // Allow cookies if needed
   })
 );
+
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       if (!origin || allowedOrigins.includes(origin)) {
+//         callback(null, true);
+//       } else {
+//         callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     credentials: true,
+//   })
+// );
 app.use(express.json()); // Parses JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parses form-data
 

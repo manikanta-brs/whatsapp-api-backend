@@ -477,107 +477,193 @@ const sendMessage = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
+const uploadFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
 
-// const getMessages = async (req, res) => {
-//   try {
-//     const { receiver, sender } = req.body;
+    const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
+    const accessToken = process.env.ACCESS_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_BUSINESS_PHONE_NUMBER_ID;
 
-//     // Validate required fields
-//     if (!receiver || !sender) {
-//       return res.status(400).json({
-//         message: "Both receiver and sender are required in the request body.",
-//       });
-//     }
+    console.log(
+      "Uploading file:",
+      req.file.originalname,
+      "Mimetype:",
+      req.file.mimetype
+    );
 
-//     // Fetch messages between sender and receiver
-//     const messages = await Message.find({
-//       $or: [
-//         { sender: sender, receiver: receiver },
-//         { sender: receiver, receiver: sender },
-//       ],
-//     })
-//       .sort({ timestamp: 1 }) // Sort by timestamp in ascending order
-//       .lean(); // Convert Mongoose documents to plain JavaScript objects
+    // Create form data for the file upload
+    const formData = new FormData();
+    formData.append("messaging_product", "whatsapp");
 
-//     console.log(
-//       `Found ${messages.length} messages between ${sender} and ${receiver}`
-//     );
+    // Ensure the file has the correct mimetype instead of application/octet-stream
+    // Get file extension and set appropriate mimetype
+    const fileExtension = req.file.originalname.split(".").pop().toLowerCase();
+    let contentType = req.file.mimetype;
 
-//     // Format the response to handle different message types
-//     const formattedMessages = messages.map((message) => {
-//       const baseMessage = {
-//         _id: message._id,
-//         sender: message.sender,
-//         receiver: message.receiver,
-//         to: message.to,
-//         type: message.type,
-//         timestamp: message.timestamp,
-//         direction: message.direction,
-//         status: message.status || "sent",
-//       };
+    // Map common extensions to their proper MIME types if needed
+    if (contentType === "application/octet-stream") {
+      const mimeTypeMap = {
+        pdf: "application/pdf",
+        doc: "application/msword",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        xls: "application/vnd.ms-excel",
+        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ppt: "application/vnd.ms-powerpoint",
+        pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        txt: "text/plain",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        webp: "image/webp",
+        mp4: "video/mp4",
+        "3gp": "video/3gpp",
+        mp3: "audio/mpeg",
+        ogg: "audio/ogg",
+        amr: "audio/amr",
+        aac: "audio/aac",
+        opus: "audio/opus",
+      };
 
-//       // Add type-specific fields
-//       if (message.type === "template") {
-//         // Safely handle template parameters conversion
-//         let parameters = {};
+      contentType = mimeTypeMap[fileExtension] || "application/octet-stream";
+      console.log(
+        `Detected file extension: ${fileExtension}, setting content type to: ${contentType}`
+      );
+    }
 
-//         // Check if parameters exist and is a Map-like object before converting
-//         if (message.template?.parameters) {
-//           try {
-//             // Handle both Map objects and regular objects
-//             if (typeof message.template.parameters.entries === "function") {
-//               // It's a Map-like object with entries method
-//               parameters = Object.fromEntries(
-//                 message.template.parameters.entries()
-//               );
-//             } else if (typeof message.template.parameters === "object") {
-//               // It's already an object
-//               parameters = message.template.parameters;
-//             }
-//           } catch (err) {
-//             console.error("Error converting template parameters:", err);
-//             // Fallback to empty object if conversion fails
-//           }
-//         }
+    // Create a blob with the correct content type
+    const fileBlob = new Blob([req.file.buffer], { type: contentType });
+    formData.append("file", fileBlob, req.file.originalname);
 
-//         return {
-//           ...baseMessage,
-//           body: undefined,
-//           template: {
-//             name: message.template?.name,
-//             language: message.template?.language,
-//             components: message.template?.components || [],
-//             parameters: parameters,
-//           },
-//         };
-//       } else if (
-//         message.type === "image" ||
-//         message.type === "document" ||
-//         message.type === "video"
-//       ) {
-//         return {
-//           ...baseMessage,
-//           body: undefined,
-//           media: message.media || {},
-//         };
-//       } else {
-//         // Text messages
-//         return {
-//           ...baseMessage,
-//           body: message.body || "",
-//           template: undefined,
-//         };
-//       }
-//     });
+    // Determine file type based on content type
+    let fileType = "document";
+    if (contentType.startsWith("image/")) {
+      fileType = "image";
+    } else if (contentType.startsWith("video/")) {
+      fileType = "video";
+    } else if (contentType.startsWith("audio/")) {
+      fileType = "audio";
+    }
 
-//     res.status(200).json(formattedMessages);
-//   } catch (error) {
-//     console.error("Error fetching messages:", error);
-//     res
-//       .status(500)
-//       .json({ message: "Failed to fetch messages", error: error.message });
-//   }
-// };
+    formData.append("type", fileType);
+
+    console.log(
+      `Uploading as file type: ${fileType}, content type: ${contentType}`
+    );
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      // FormData will set its own content-type with boundary
+    };
+
+    const response = await fetch(`${apiURL}${phoneNumberId}/media`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (jsonError) {
+        return res.status(response.status).json({
+          message: `HTTP error: ${response.status} ${response.statusText}. Could not parse error details.`,
+        });
+      }
+
+      return res.status(response.status).json({
+        message: `HTTP error: ${response.status} ${response.statusText}`,
+        details: errorData,
+      });
+    }
+
+    const data = await response.json();
+    console.log("Media upload response:", JSON.stringify(data, null, 2));
+
+    return res.status(200).json({
+      message: "File uploaded successfully",
+      mediaId: data.id,
+      fileType: fileType,
+      originalName: req.file.originalname,
+    });
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    return res.status(500).json({
+      message: "Failed to upload file",
+      error: error.message,
+    });
+  }
+};
+
+// New function to delete uploaded media files
+const deleteMedia = async (req, res) => {
+  try {
+    const { mediaId } = req.params;
+
+    if (!mediaId) {
+      return res.status(400).json({
+        message: "Media ID is required",
+      });
+    }
+
+    const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
+    const accessToken = process.env.ACCESS_TOKEN;
+
+    console.log(`Attempting to delete media with ID: ${mediaId}`);
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
+
+    const response = await fetch(`${apiURL}${mediaId}`, {
+      method: "DELETE",
+      headers,
+    });
+
+    // Handle 200 OK response (successful deletion)
+    if (response.status === 200) {
+      return res.status(200).json({
+        success: true,
+        message: "Media deleted successfully",
+        mediaId: mediaId,
+      });
+    }
+
+    // Handle other responses (usually errors)
+    let errorData;
+    try {
+      // Try to parse error response as JSON
+      errorData = await response.json();
+    } catch (jsonError) {
+      // If response isn't JSON, use status text
+      return res.status(response.status).json({
+        success: false,
+        message: `Failed to delete media: ${response.status} ${response.statusText}`,
+        mediaId: mediaId,
+      });
+    }
+
+    // Return structured error response
+    return res.status(response.status).json({
+      success: false,
+      message: `Failed to delete media: ${response.status} ${response.statusText}`,
+      details: errorData,
+      mediaId: mediaId,
+    });
+  } catch (error) {
+    console.error("Error deleting media:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete media",
+      error: error.message,
+    });
+  }
+};
+
 const getMessages = async (req, res) => {
   try {
     const { receiver, sender } = req.body;
@@ -691,11 +777,103 @@ const getMessages = async (req, res) => {
   }
 };
 
+// Add this new function to retrieve media files
+
+const getMedia = async (req, res) => {
+  try {
+    const { mediaId } = req.params;
+
+    if (!mediaId) {
+      return res.status(400).json({
+        message: "Media ID is required",
+      });
+    }
+
+    const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
+    const accessToken = process.env.ACCESS_TOKEN;
+
+    console.log(`Retrieving media with ID: ${mediaId}`);
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+    };
+
+    // First, get the media URL
+    const response = await fetch(`${apiURL}${mediaId}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (jsonError) {
+        return res.status(response.status).json({
+          message: `HTTP error: ${response.status} ${response.statusText}. Could not parse error details.`,
+        });
+      }
+
+      return res.status(response.status).json({
+        message: `HTTP error: ${response.status} ${response.statusText}`,
+        details: errorData,
+      });
+    }
+
+    const mediaData = await response.json();
+
+    if (!mediaData.url) {
+      return res.status(404).json({
+        message: "Media URL not found in the response",
+      });
+    }
+
+    // Now fetch the actual media file using the URL
+    const mediaResponse = await fetch(mediaData.url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!mediaResponse.ok) {
+      return res.status(mediaResponse.status).json({
+        message: `Failed to fetch media file: ${mediaResponse.status} ${mediaResponse.statusText}`,
+      });
+    }
+
+    // Get the content type from the response
+    const contentType = mediaResponse.headers.get("content-type");
+
+    // Get the file buffer
+    const fileBuffer = await mediaResponse.buffer();
+
+    // Set appropriate headers for the response
+    res.setHeader("Content-Type", contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="media_${mediaId}"`
+    );
+
+    // Send the file
+    return res.send(fileBuffer);
+  } catch (error) {
+    console.error("Error retrieving media:", error);
+    return res.status(500).json({
+      message: "Failed to retrieve media",
+      error: error.message,
+    });
+  }
+};
+
+// Export the new function along with existing ones
 export {
   getUserData,
   getMessageTemplates,
   getPhoneNumbers,
+  uploadFile,
+  deleteMedia,
+  getMedia, // Export the new function
   sendMessage,
   getMessages,
-  getSessionStatus, // Export the new function
+  getSessionStatus,
 };
