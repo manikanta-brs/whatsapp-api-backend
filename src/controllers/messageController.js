@@ -5,6 +5,87 @@ import dotenv from "dotenv";
 dotenv.config();
 import axios from "axios";
 
+// Add a new function to check if a user is within the 24-hour window
+
+const isWithin24HourWindow = async (phoneNumber) => {
+  try {
+    // Find the most recent message from this user (received messages only)
+    const latestMessage = await Message.findOne({
+      sender: phoneNumber,
+      direction: "received",
+    }).sort({ timestamp: -1 });
+
+    if (!latestMessage) {
+      return false; // No messages from this user, outside window
+    }
+
+    // Calculate time difference in hours
+    const now = new Date();
+    const lastMessageTime = new Date(latestMessage.timestamp);
+    const hoursDifference = (now - lastMessageTime) / (1000 * 60 * 60);
+
+    return hoursDifference < 24;
+  } catch (error) {
+    console.error("Error checking 24-hour window:", error);
+    return false; // Default to false on error
+  }
+};
+
+// Add a function to get session status for a user
+const getSessionStatus = async (req, res) => {
+  try {
+    const { phoneNumber } = req.params;
+
+    if (!phoneNumber) {
+      return res.status(400).json({
+        message: "Phone number is required",
+      });
+    }
+
+    // Find the most recent message from this user
+    const latestMessage = await Message.findOne({
+      sender: phoneNumber,
+      direction: "received",
+    }).sort({ timestamp: -1 });
+
+    if (!latestMessage) {
+      return res.json({
+        phoneNumber,
+        hasActiveSession: false,
+        sessionExpiresAt: null,
+        timeRemaining: null,
+      });
+    }
+
+    // Calculate session expiry time (24 hours after last message)
+    const lastMessageTime = new Date(latestMessage.timestamp);
+    const sessionExpiresAt = new Date(
+      lastMessageTime.getTime() + 24 * 60 * 60 * 1000
+    );
+    const now = new Date();
+    const hasActiveSession = now < sessionExpiresAt;
+
+    // Calculate time remaining in minutes
+    const timeRemaining = hasActiveSession
+      ? Math.floor((sessionExpiresAt - now) / (1000 * 60))
+      : 0;
+
+    return res.json({
+      phoneNumber,
+      hasActiveSession,
+      sessionExpiresAt,
+      timeRemaining,
+      lastMessageAt: lastMessageTime,
+    });
+  } catch (error) {
+    console.error("Error getting session status:", error);
+    return res.status(500).json({
+      message: "Failed to get session status",
+      error: error.message,
+    });
+  }
+};
+
 const getUserData = async (req, res) => {
   try {
     const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
@@ -54,51 +135,6 @@ const getPhoneNumbers = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
-
-// const getMessageTemplates = async (req, res) => {
-//   try {
-//     const baseURL = `${process.env.BASEURL}${process.env.VERSION}/`;
-//     const accessToken = process.env.ACCESS_TOKEN;
-//     const whatsappBusinessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
-
-//     const headers = {
-//       Authorization: `Bearer ${accessToken}`,
-//       "Content-Type": "application/json",
-//     };
-
-//     let allTemplates = [];
-//     let nextURL = `${baseURL}${whatsappBusinessAccountId}/message_templates`;
-
-//     while (nextURL) {
-//       console.log(`Fetching from: ${nextURL}`);
-
-//       const response = await axios.get(nextURL, { headers });
-
-//       if (response.status !== 200) {
-//         throw new Error(
-//           `HTTP error: ${response.status} ${response.statusText}`
-//         );
-//       }
-
-//       const templates = response.data.data;
-//       allTemplates = allTemplates.concat(templates); // Add current batch to results
-
-//       if (response.data.paging && response.data.paging.next) {
-//         nextURL = response.data.paging.next;
-//       } else {
-//         nextURL = null; // No more pages
-//       }
-//     }
-
-//     console.log("Total Templates:", allTemplates.length);
-//     return res.json(allTemplates);
-//   } catch (error) {
-//     console.error("Error fetching templates:", error); //Better error logging
-//     return res
-//       .status(500)
-//       .json({ message: "Internal server error", error: error.message }); //Include error message in response
-//   }
-// };
 
 const getMessageTemplates = async (req, res) => {
   try {
@@ -205,111 +241,6 @@ const getMessageTemplates = async (req, res) => {
   }
 };
 
-// const sendMessage = async (req, res) => {
-//   try {
-//     const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
-//     const accessToken = process.env.ACCESS_TOKEN;
-//     const {
-//       messaging_product,
-//       to,
-//       type,
-//       template,
-//       text,
-//       image,
-//       receiver,
-//       sender,
-//     } = req.body;
-
-//     const headers = {
-//       Authorization: `Bearer ${accessToken}`,
-//       "Content-Type": "application/json",
-//     };
-
-//     let body = { messaging_product, to, type };
-
-//     if (type === "template") {
-//       if (!template || !template.name || !template.language) {
-//         return res.status(400).json({
-//           message:
-//             "Template name and language are required for template messages",
-//         });
-//       }
-
-//       body.template = {
-//         name: template.name,
-//         language: template.language,
-//         components: template.components || [],
-//       };
-//     } else if (type === "text") {
-//       if (!text || !text.body) {
-//         return res
-//           .status(400)
-//           .json({ message: "Text body is required for text messages" });
-//       }
-//       body.text = text;
-//     } else if (type === "image") {
-//       if (!image || (!image.link && !image.id)) {
-//         return res
-//           .status(400)
-//           .json({ message: "Image link or ID is required for image messages" });
-//       }
-//       body.image = image;
-//     } else {
-//       return res.status(400).json({ message: "Invalid message type" });
-//     }
-
-//     const response = await fetch(
-//       `${apiURL}${process.env.WHATSAPP_BUSINESS_PHONE_NUMBER_ID}/messages`,
-//       {
-//         method: "POST",
-//         headers,
-//         body: JSON.stringify(body),
-//       }
-//     );
-
-//     if (!response.ok) {
-//       let errorData;
-//       try {
-//         errorData = await response.json();
-//       } catch (jsonError) {
-//         return res.status(response.status).json({
-//           message: `HTTP error: ${response.status} ${response.statusText}. Could not parse error details.`,
-//         });
-//       }
-
-//       return res.status(response.status).json({
-//         message: `HTTP error: ${response.status} ${response.statusText}`,
-//         details: errorData,
-//       });
-//     }
-
-//     const data = await response.json();
-
-//     try {
-//       const newMessage = new Message({
-//         sender: sender,
-//         receiver: to,
-//         to: to,
-//         type: type,
-//         body:
-//           type === "text"
-//             ? text.body
-//             : template
-//             ? template.components?.find((comp) => comp.type === "body")?.text
-//             : "",
-//         templateName: type === "template" ? template.name : null,
-//         templateParameters: type === "template" ? template.components : null,
-//         direction: "sent",
-//       });
-
-//       await newMessage.save();
-//     } catch (dbError) {}
-
-//     return res.json(data);
-//   } catch (error) {
-//     return res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 const sendMessage = async (req, res) => {
   try {
     const apiURL = `${process.env.BASEURL}${process.env.VERSION}/`;
@@ -327,13 +258,54 @@ const sendMessage = async (req, res) => {
 
     console.log("Request body:", JSON.stringify(req.body, null, 2));
 
-    const headers = {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+    // Define the body variable that will be sent to WhatsApp API
+    const body = {
+      messaging_product: messaging_product || "whatsapp",
+      recipient_type: "individual",
+      to: to,
+      type: type,
     };
 
-    let body = { messaging_product, to, type };
+    // Check if this is a non-template message and if user is outside 24-hour window
+    if (type !== "template") {
+      const isInWindow = await isWithin24HourWindow(to);
+      if (!isInWindow) {
+        // Create a failed message record in the database
+        const newMessage = new Message({
+          sender: sender,
+          receiver: to,
+          to: to,
+          type: type,
+          body: type === "text" ? text?.body : "",
+          direction: "sent",
+          status: "failed",
+          status_timestamp: new Date(),
+          error_info: {
+            code: 131047,
+            title: "Message Outside Allowed Window",
+            message: "24-hour session expired. Cannot send free-form messages.",
+            details: "Use template messages instead.",
+          },
+          metadata: {
+            timestamp: new Date(),
+          },
+        });
 
+        await newMessage.save();
+
+        return res.status(400).json({
+          message:
+            "Cannot send message: 24-hour customer service window expired",
+          details: {
+            error: "Outside 24-hour window",
+            code: 131047,
+            suggestion: "Use a template message instead",
+          },
+        });
+      }
+    }
+
+    // Add message-type specific properties to the body
     if (type === "template") {
       if (!template || !template.name || !template.language) {
         return res.status(400).json({
@@ -365,7 +337,13 @@ const sendMessage = async (req, res) => {
       return res.status(400).json({ message: "Invalid message type" });
     }
 
+    // Rest of the function remains the same
     console.log("Sending to WhatsApp API:", JSON.stringify(body, null, 2));
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
 
     const response = await fetch(
       `${apiURL}${process.env.WHATSAPP_BUSINESS_PHONE_NUMBER_ID}/messages`,
@@ -564,6 +542,7 @@ const sendMessage = async (req, res) => {
 
 //         return {
 //           ...baseMessage,
+//           body: undefined,
 //           template: {
 //             name: message.template?.name,
 //             language: message.template?.language,
@@ -578,6 +557,7 @@ const sendMessage = async (req, res) => {
 //       ) {
 //         return {
 //           ...baseMessage,
+//           body: undefined,
 //           media: message.media || {},
 //         };
 //       } else {
@@ -585,6 +565,7 @@ const sendMessage = async (req, res) => {
 //         return {
 //           ...baseMessage,
 //           body: message.body || "",
+//           template: undefined,
 //         };
 //       }
 //     });
@@ -624,6 +605,16 @@ const getMessages = async (req, res) => {
 
     // Format the response to handle different message types
     const formattedMessages = messages.map((message) => {
+      // Extract delivery and read status information
+      const deliveryStatus = {
+        delivered: message.status === "delivered" || message.status === "read",
+        deliveredAt: message.status_timestamp || null,
+        read: message.status === "read",
+        readAt: message.status === "read" ? message.status_timestamp : null,
+        status: message.status || "sent", // Default to "sent" if status is not defined
+        error: message.error_info || null,
+      };
+
       const baseMessage = {
         _id: message._id,
         sender: message.sender,
@@ -633,6 +624,8 @@ const getMessages = async (req, res) => {
         timestamp: message.timestamp,
         direction: message.direction,
         status: message.status || "sent",
+        deliveryInfo: deliveryStatus,
+        metadata: message.metadata || {},
       };
 
       // Add type-specific fields
@@ -704,4 +697,5 @@ export {
   getPhoneNumbers,
   sendMessage,
   getMessages,
+  getSessionStatus, // Export the new function
 };

@@ -5,6 +5,7 @@ import {
   getPhoneNumbers,
   sendMessage,
   getMessages,
+  getSessionStatus,
 } from "../controllers/messageController.js";
 
 import {
@@ -29,5 +30,7 @@ router.post("/sendmessage", sendMessage);
 router.post("/upload", upload.single("file"), handleUpload);
 router.post("/messages", getMessages);
 router.get("/app", getAppDetails);
+// Add this route to your existing routes
+router.get("/session/:phoneNumber", getSessionStatus);
 
 export default router;
